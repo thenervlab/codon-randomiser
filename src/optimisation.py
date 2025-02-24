@@ -16,6 +16,7 @@ new_codons = pd.DataFrame(wrap(new_seq, 3), columns=['new_codon'])
 
 codons = pd.merge(old_codons, new_codons, left_index=True, right_index=True)
 
+# Calculate the matching condons and nucleotides
 
 def calculate_identity(codons):
     codons['codon_identity'] = [1 if old == new else 0 for old, new in codons[['original_codon', 'new_codon']].values]
@@ -38,7 +39,7 @@ def calculate_identity(codons):
 
 codons = calculate_identity(codons)
 
-
+# Visualise overlap in old and new sequences
 def plot_identity():
     fig, ax = plt.subplots(figsize=(20, 5))
     plt.stem(range(len(codons)), codons['nucleotide_identity'])
@@ -48,7 +49,14 @@ def plot_identity():
 
 plot_identity()
 
+# Filter identical nucleotides
+identical_nucs = codons[codons['nucleotide_identity'] == 3].copy()
 
-codons[codons['nucleotide_identity'] == 3]
+# Check for clusters of identical sequence - modify at least every second codon in a cluster using a random codon
 
-codons['nucleotide_identity'].value_counts()
+# Recalculate identity with updated codons
+
+# Compare codon usage to optimal frequency
+# -> add optimal frequencies to the codon-table.csv as a new column
+# -> calculate frequency usage in both GenScript and randomised sequences
+# -> Visualise difference in optimal for each amino acid 
