@@ -54,6 +54,52 @@ identical_nucs = codons[codons['nucleotide_identity'] == 3].copy()
 
 # Check for clusters of identical sequence - modify at least every second codon in a cluster using a random codon
 
+# determine index numbers of identical nucleotide clusters
+
+cluster_nucs = []
+for row in identical_nucs.index:
+    cluster_nucs.append(row)
+
+from itertools import groupby
+from operator import itemgetter
+    
+
+nucleotide_clus = []
+for k, g in groupby(enumerate(cluster_nucs), lambda ix : ix[0] - ix[1]):
+    nucleotide_clus.append((list(map(itemgetter(1), g))))
+
+
+#exclude all the single values
+
+clusters = [x for x in nucleotide_clus if len(x)>=2]
+
+# flatten list 
+
+flattened_nucs = [item for sublist in clusters for item in sublist]
+
+# add another column to dodon table for yes/no to indicate when indices are part of clustered list
+
+# bring in codon table from randomiser
+# utilise to make new randomised+optimised
+
+
+# new_codons = []
+# for codon in codons['original_codon']:
+#     amino_acid = dict(codon_map[['Codon', 'AminoAcid']].values)[codon]
+    
+#     available_codons = codon_map[codon_map['AminoAcid'] == amino_acid]['Codon'].tolist().copy()
+        
+#     if stringency == 'high':
+#         if len(available_codons) > 1:
+#             available_codons = [val for val in available_codons if val != codon]
+    
+#     new_codons.append(np.random.choice(available_codons))
+    
+# codons['new_codon'] = new_codons  
+#add column to dataframe 
+
+
+
 # Recalculate identity with updated codons
 
 # Compare codon usage to optimal frequency
