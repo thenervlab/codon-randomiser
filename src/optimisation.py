@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from textwrap import wrap
-
+from loguru import logger
 
 
 old_seq = 'ATGGGGCAAACTAAAAGTAAAATTAAAAGTAAATATGCCTCTTATCTCAGCTTTATTAAAATTCTTTTAAAAAGAGGGGGAGTTAAAGTATCTACAAAAAATCTAATCAAGCTATTTCAAATAATAGAACAATTTTGCCCATGGTTTCCAGAACAAGGAACTTTAGATCTAAAAGATTGGAAAAGAATTGGTAAGGAACTAAAACAAGCAGGTAGGAAGGGTAATATCATTCCACTTACAGTATGGAATGATTGGGCCATTATTAAAGCAGCTTTAGAACCATTTCAAACAGAAGAAGATAGCGTTTCAGTTTCTGATGCCCCTGGAAGCTGTATAATAGATTGTAATGAAAACACAAGGAAAAAATCCCAGAAAGAAACGGAAGGTTTACATTGCGAATATGTAGCAGAGCCGGTAATGGCTCAGTCAACGCAAAATGTTGACTATAATCAATTACAGGAGGTGATATATCCTGAAACGTTAAAATTAGAAGGAAAAGGTCCAGAATTAGTGGGGCCATCAGAGTCTAAACCACGAGGCACAAGTCCTCTTCCAGCAGGTCAGGTGCCCGTAACATTACAACCTCAAAAGCAGGTTAAAGAAAATAAGACCCAACCGCCAGTAGCCTATCAATACTGGCCTCCGGCTGAACTTCAGTATCGGCCACCCCCAGAAAGTCAGTATGGATATCCAGGAATGCCCCCAGCACCACAGGGCAGGGCGCCATACCCTCAGCCGCCCACTAGGAGACTTAATCCTACGGCACCACCTAGTAGACAGGGTAGTGAATTACATGAAATTATTGATAAATCAAGAAAGGAAGGAGATACTGAGGCATGGCAATTCCCAGTAACGTTAGAACCGATGCCACCTGGAGAAGGAGCCCAAGAGGGAGAGCCTCCCACAGTTGAGGCCAGATACAAGTCTTTTTCGATAAAAATGCTAAAAGATATGAAAGAGGGAGTAAAACAGTATGGACCCAACTCCCCTTATATGAGGACATTATTAGATTCCATTGCTCATGGACATAGACTCATTCCTTATGATTGGGAGATTCTGGCAAAATCGTCTCTCTCACCCTCTCAATTTTTACAATTTAAGACTTGGTGGATTGATGGGGTACAAGAACAGGTCCGAAGAAATAGGGCTGCCAATCCTCCAGTTAACATAGATGCAGATCAACTATTAGGAATAGGTCAAAATTGGAGTACTATTAGTCAACAAGCATTAATGCAAAATGAGGCCATTGAGCAAGTTAGAGCTATCTGCCTTAGAGCCTGGGAAAAAATCCAAGACCCAGGAAGTACCTGCCCCTCATTTAATACAGTAAGACAAGGTTCAAAAGAGCCCTATCCTGATTTTGTGGCAAGGCTCCAAGATGTTGCTCAAAAGTCAATTGCCGATGAAAAAGCCCGTAAGGTCATAGTGGAGTTGATGGCATATGAAAACGCCAATCCTGAGTGTCAATCAGCCATTAAGCCATTAAAAGGAAAGGTTCCTGCAGGATCAGATGTAATCTCAGAATATGTAAAAGCCTGTGATGGAATCGGAGGAGCTATGCATAAAGCTATGCTTATGGCTCAAGCAATAACAGGAGTTGTTTTAGGAGGACAAGTTAGAACATTTGGAGGAAAATGTTATAATTGTGGTCAAATTGGTCACTTAAAAAAGAATTGCCCAGTCTTAAACAAACAGAATATAACTATTCAAGCAACTACAACAGGTAGAGAGCCACCTGACTTATGTCCAAGATGTAAAAAAGGAAAACATTGGGCTAGTCAATGTCGTTCTAAATTTGATAAAAATGGGCAACCATTGTCGGGAAACGAGCAAAGGGGCCAGCCTCAGGCCCCACAACAAACTGGGGCATTCCCAATTCAGCCATTTGTTCCTCAGGGTTTTCAGGGACAACAACCCCCACTGTCCCAAGTGTTTCAGGGAATAAGCCAGTTACCACAATACAACAATTGTCCCCCGCCACAAGCGGCAGTGCAGCAGTAG'
@@ -79,30 +79,68 @@ flattened_nucs = [item for sublist in clusters for item in sublist]
 
 # add another column to dodon table for yes/no to indicate when indices are part of clustered list
 
-# bring in codon table from randomiser
+codons['clustered?']= [1 if x in flattened_nucs else 0 for x in codons.index.tolist()]
+
+
+
+# bring in codon table from randomiser and edit to read table rather then text
+
+# Bring in codon table
+
+input_codon_map = 'experimental_data/codon-table.csv'
+
+codon_map = pd.read_csv(input_codon_map)
+stop_codons = codon_map[codon_map['FullName'] == 'Stop'].copy()['Codon'].tolist() 
+
 # utilise to make new randomised+optimised
 
+stringency = 'high'
 
-# new_codons = []
-# for codon in codons['original_codon']:
-#     amino_acid = dict(codon_map[['Codon', 'AminoAcid']].values)[codon]
-    
-#     available_codons = codon_map[codon_map['AminoAcid'] == amino_acid]['Codon'].tolist().copy()
-        
-#     if stringency == 'high':
-#         if len(available_codons) > 1:
-#             available_codons = [val for val in available_codons if val != codon]
-    
-#     new_codons.append(np.random.choice(available_codons))
-    
-# codons['new_codon'] = new_codons  
-#add column to dataframe 
+final_codons = []
+for codon, cluster in zip(codons['new_codon'], codons['clustered?']):
+    if cluster==1:
+        amino_acid = dict(codon_map[['Codon', 'AminoAcid']].values)[codon]
 
+        available_codons = codon_map[codon_map['AminoAcid'] == amino_acid]['Codon'].tolist().copy()
+        if stringency == 'high':
+            if len(available_codons) > 1:
+                available_codons = [val for val in available_codons if val != codon]        
+        final_codons.append(np.random.choice(available_codons))
+    else:
+        final_codons.append(codon)
+codons['final_codon'] = final_codons  
 
 
 # Recalculate identity with updated codons
 
+codons['final_codon_identity'] = [1 if old == new else 0 for old, new in codons[['new_codon', 'final_codon']].values]
+codon_identity = codons['codon_identity'].sum() / len(codons) * 100
+logger.info(f'The proportion of matched codons is:{codon_identity} %')
+
+nt_identities = []
+for old, new in codons[['new_codon', 'final_codon']].values:
+    if old == new:
+        nt_identities.append(3)
+    else:
+        nt_identity = 0
+        for nt_old, nt_new in zip(old, new):
+            if nt_old == nt_new:
+                nt_identity += 1
+    
+        nt_identities.append(nt_identity)
+codons['final_nucleotide_identity'] = nt_identities
+
+# Visualise overlap in old and new sequences
+def plot_identity():
+    fig, ax = plt.subplots(figsize=(20, 5))
+    plt.stem(range(len(codons)), codons['final_nucleotide_identity'])
+    plt.xlabel('Position')
+    
+    return fig
+
+plot_identity()
 # Compare codon usage to optimal frequency
 # -> add optimal frequencies to the codon-table.csv as a new column
+
 # -> calculate frequency usage in both GenScript and randomised sequences
 # -> Visualise difference in optimal for each amino acid 
