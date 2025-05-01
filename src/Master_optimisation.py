@@ -5,6 +5,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from textwrap import wrap
 from loguru import logger
+from itertools import groupby
+from operator import itemgetter
+    
+
 
 np.random.seed(105105)
 
@@ -43,14 +47,14 @@ def calculate_identity(codons):
 codons = calculate_identity(codons)
 
 # Visualise overlap in old and new sequences
-def plot_identity():
-    fig, ax = plt.subplots(figsize=(20, 5))
-    plt.stem(range(len(codons)), codons['nucleotide_identity'])
-    plt.xlabel('Position')
-    
-    return fig
+    def plot_identity():
+        fig, ax = plt.subplots(figsize=(20, 5))
+        plt.stem(range(len(codons)), codons['nucleotide_identity'])
+        plt.xlabel('Position')
+        
+        return fig
 
-plot_identity()
+    plot_identity()
 
 # Filter identical nucleotides
 identical_nucs = codons[codons['nucleotide_identity'] == 3].copy()
@@ -62,10 +66,6 @@ identical_nucs = codons[codons['nucleotide_identity'] == 3].copy()
 cluster_nucs = []
 for row in identical_nucs.index:
     cluster_nucs.append(row)
-
-from itertools import groupby
-from operator import itemgetter
-    
 
 nucleotide_clus = []
 for k, g in groupby(enumerate(cluster_nucs), lambda ix : ix[0] - ix[1]):
