@@ -15,39 +15,18 @@ input_path = 'results/'
 input_codon_map = 'experimental_data/codon-table.csv'
 output_folder = 'results/'
 
+np.random.seed(105105)
 
 file_list = [filename for filename in os.listdir(input_path) if 'Optimised-sequences_' in filename]
 
 sequences = []
 for x in file_list:
     sequence = pd.read_csv(f'{input_path}{x}')
-    sequence['graph_negatives'] = - sequence ['final_nucleotide_identity']
+    sequence['graph_negatives'] = - sequence['final_nucleotide_identity']
     sequence['data_source'] = x
     sequences.append(sequence)
 
-
-#Locate TG repeats in final codon
-for i in sequences: 
-    final_codon_list = i['final_codon'].tolist()
-    final_codon_seq = ''.join(final_codon_list)
-    T_1 = re.sub(r'T(?=G)', '1', final_codon_seq)
-    T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
-    T0 = re.sub(r'[A-Z]', '0', T_1_A)
-    i['T0_A_final'] = wrap(T0, 3)
-    
-
-#replace '10' repeats with R
-min_repeats = 5
-for i in sequences:
-    repeat_lists = i['T0_A_final'].tolist()
-    repeat_seq = ''.join(repeat_lists)
-    pattern = f"(10(2)?){min_repeats,}"
-    matches = re.sub(pattern, 'R', repeat_seq)
-    i['identified_repeats_final'] = wrap(matches, 3)
-
-for i in sequences:
-    i['R_found_final'] = ['Y' if 'R' in repeats else 'N' for repeats in i['identified_repeats_final']]
-
+#NEW CODON TG REPEATS
 #Locate TG repeats in optimised codon
 T0_list = []
 for i in sequences: 
@@ -60,81 +39,138 @@ for i in sequences:
 
 
 #replace '10' repeats with R
-min_repeats = 5
+min_repeats = 1
 for i in sequences:
     repeat_lists = i['T0_A_new'].tolist()
     repeat_seq = ''.join(repeat_lists)
-    pattern = f"(10(2)?){min_repeats,}"
-    matches = re.sub(pattern, 'R', repeat_seq)
+    pattern = f"(1010)"
+    matches = re.sub(pattern, 'RRRR', repeat_seq)
     i['identified_repeats_new'] = wrap(matches, 3)
 
 for i in sequences:
     i['R_found_new'] = ['Y' if 'R' in repeats else 'N' for repeats in i['identified_repeats_new']]
 
-
-#Locate AUG12 sequence in final codon
+#final CODON TG REPEATS
+#Locate TG repeats in optimised codon
+T0_list = []
 for i in sequences: 
-    final_codon_list = i['final_codon'].tolist()
-    final_codon_seq = ''.join(final_codon_list)
-    AUG12_sub = re.sub(r'GUGUGAAUGAAU', 'XXXXXXXXXX', final_codon_seq)
-    i['AUG12_final'] = wrap(AUG12_sub, 3)
+    new_codon_list = i['final_codon'].tolist()
+    new_codon_seq = ''.join(new_codon_list)
+    T_1 = re.sub(r'T(?=G)', '1', new_codon_seq)
+    T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
+    T0 = re.sub(r'[A-Z]', '0', T_1_A)
+    i['T0_A_final'] = wrap(T0, 3)
+
+
+#replace '10' repeats with R
+min_repeats = 1
+for i in sequences:
+    repeat_lists = i['T0_A_final'].tolist()
+    repeat_seq = ''.join(repeat_lists)
+    pattern = f"(1010)"
+    matches = re.sub(pattern, 'RRRR', repeat_seq)
+    i['identified_repeats_final'] = wrap(matches, 3)
 
 for i in sequences:
-    i['AUG12_found_final'] = ['Y' if 'X' in repeats else 'N' for repeats in i['AUG12_final']]
+    i['R_found_final'] = ['Y' if 'R' in repeats else 'N' for repeats in i['identified_repeats_final']]
 
-#Locate AUG12 sequence in new codon
-for i in sequences: 
-    final_codon_list = i['new_codon'].tolist()
-    final_codon_seq = ''.join(final_codon_list)
-    AUG12_sub = re.sub(r'GUGUGAAUGAAU', 'XXXXXXXXXX', final_codon_seq)
-    i['AUG12_new'] = wrap(AUG12_sub, 3)
-
-for i in sequences:
-    i['AUG12_found_new'] = ['Y' if 'X' in repeats else 'N' for repeats in i['AUG12_new']]
-
-#Locate CLIP34nt sequence in final codon
-for i in sequences: 
-    final_codon_list = i['final_codon'].tolist()
-    final_codon_seq = ''.join(final_codon_list)
-    CLIP34nt_sub = re.sub(r'GAGAGAGCGCGUGCAGAGACUUGGUGGUGCAUAA', 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', final_codon_seq)
-    i['CLIP34nt_final'] = wrap(CLIP34nt_sub, 3)
-
-for i in sequences:
-    i['CLIP34nt_found_final'] = ['Y' if 'X' in repeats else 'N' for repeats in i['CLIP34nt_final']]
-
-#Locate CLIP34nt sequence in new codon
-for i in sequences: 
-    final_codon_list = i['new_codon'].tolist()
-    final_codon_seq = ''.join(final_codon_list)
-    CLIP34nt_sub = re.sub(r'GAGAGAGCGCGUGCAGAGACUUGGUGGUGCAUAA', 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', final_codon_seq)
-    i['CLIP34nt_new'] = wrap(CLIP34nt_sub, 3)
-
-for i in sequences:
-    i['CLIP34nt_found_new'] = ['Y' if 'X' in repeats else 'N' for repeats in i['CLIP34nt_new']]
 
 
 #concatenate all dataframes
 sequences = pd.concat(sequences)
 
-sequences['protein'] = sequences['data_source'].str.split('_').str[-1].str.split('.').str[0]
+#identify 1st codon of RRRR repeats
 
-graph_pos = {'ENV':10,'POL':20,'PRO':30,'GAG':40}
+sequences['R_cluster'] = (sequences['R_found_final'] == 'Y') & (sequences['R_found_final'].shift(-1) == 'Y')
 
-sequences['adjusted_position_ro'] = sequences['protein'].map(graph_pos) + sequences['graph_negatives']
+#Randomise RRRR repeats
 
-sequences['adjusted_position_o'] = sequences['protein'].map(graph_pos) + sequences['nucleotide_identity']
+input_codon_map = 'experimental_data/codon-table.csv'
 
+codon_map = pd.read_csv(input_codon_map)
+stop_codons = codon_map[codon_map['FullName'] == 'Stop'].copy()['Codon'].tolist() 
+
+stringency = 'high'
+new_codons = []
+
+#NOT WORKING
+
+def randomise_codons(i):
+    final_codons = []
+    for codon, cluster in zip(sequences['final_codon'], sequences['R_cluster']):
+        if cluster==True:
+            amino_acid = dict(codon_map[['Codon', 'AminoAcid']].values)[codon]
+
+            available_codons = codon_map[codon_map['AminoAcid'] == amino_acid]['Codon'].tolist().copy()
+            if stringency == 'high':
+                if len(available_codons) > 1:
+                    available_codons = [val for val in available_codons if val != codon]        
+            final_codons.append(np.random.choice(available_codons))
+        else:
+            final_codons.append(codon)
+    return final_codons
+
+sequences['ro_codon'] = randomise_codons(sequences)
+
+#NUCLEOTIDE IDENTITY CALCULATION FOR RO_CODONS
+
+sequences['ro_codon_identity'] = [1 if old == new else 0 for old, new in sequences[['new_codon', 'ro_codon']].values]
+codon_identity = sequences['codon_identity'].sum() / len(sequences) * 100
+logger.info(f'The proportion of matched codons is:{codon_identity} %')
+
+nt_identities = []
+for old, new in sequences[['original_codon', 'ro_codon']].values:
+    if old == new:
+        nt_identities.append(3)
+    else:
+        nt_identity = 0
+        for nt_old, nt_new in zip(old, new):
+            if nt_old == nt_new:
+                nt_identity += 1
+    
+        nt_identities.append(nt_identity)
+sequences['ro_nucleotide_identity'] = nt_identities
+
+#RO_CODON TG REPEATS
+#Locate TG repeats in final codon
+
+ro_codon_list = sequences['ro_codon'].tolist()
+ro_codon_seq = ''.join(ro_codon_list)
+T_1 = re.sub(r'T(?=G)', '1', ro_codon_seq)
+T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
+T0 = re.sub(r'[A-Z]', '0', T_1_A)
+sequences['T0_A_ro'] = wrap(T0, 3)
+    
+
+#replace '10' repeats with R
+
+repeat_lists = sequences['T0_A_ro'].tolist()
+repeat_seq = ''.join(repeat_lists)
+pattern = f"(1010)"
+matches = re.sub(pattern, 'RRRR', repeat_seq)
+sequences['identified_repeats_ro'] = wrap(matches, 3)
+sequences['R_found_ro'] = ['Y' if 'R' in repeats else 'N' for repeats in sequences['identified_repeats_ro']]
 
 
 #Visualisation of nucleotide identity
-tick_labels = dict(sequences[['adjusted_position_ro', 'graph_negatives']].values)
+
+sequences['protein'] = sequences['data_source'].str.split('_').str[-1].str.split('.').str[0]
+
+graph_pos = {'ENV':10,'POL':20,'PRO':30,'GAG':40}
+sequences['ro_graph_negatives'] = - sequences['ro_nucleotide_identity']
+
+sequences['adjusted_position_ro'] = sequences['protein'].map(graph_pos) + sequences['ro_graph_negatives']
+
+sequences['adjusted_position_o'] = sequences['protein'].map(graph_pos) + sequences['nucleotide_identity']
+
+tick_labels = dict(sequences[['adjusted_position_ro', 'ro_graph_negatives']].values)
 tick_labels.update(sequences[['adjusted_position_o', 'nucleotide_identity']].values)
 
 #plot graph
-fig, ax = plt.subplots( figsize=(35, 25))
+fig, ax = plt.subplots(figsize=(35, 25))
 for protein, df in sequences.groupby('protein'):
-    plt.stem(range(len(df)), df['adjusted_position_ro'], bottom=graph_pos[protein])
-    plt.stem(range(len(df)), df['adjusted_position_o'], bottom=graph_pos[protein])
+    ax.stem(range(len(df)), df['adjusted_position_ro'], bottom=graph_pos[protein])
+    ax.stem(range(len(df)), df['adjusted_position_o'], bottom=graph_pos[protein])
     clustered_points = df[df['R_found_new'] == 'Y']
     ax.stem(
         clustered_points.index,
@@ -144,49 +180,13 @@ for protein, df in sequences.groupby('protein'):
         markerfmt='ro',  # Red marker
         basefmt=' '
     )
-    clustered_points = df[df['R_found_final'] == 'Y']
+    clustered_points = df[df['R_found_ro'] == 'Y']
     ax.stem(
         clustered_points.index,
-        clustered_points['adjusted_position_o'],
+        clustered_points['adjusted_position_ro'],
         bottom=graph_pos[protein],
         linefmt='r-',  # Red line
         markerfmt='ro',  # Red marker
-        basefmt=' '
-    )
-    clustered_points = df[df['AUG12_found_new'] == 'Y']
-    ax.stem(
-        clustered_points.index,
-        clustered_points['adjusted_position_o'],
-        bottom=graph_pos[protein],
-        linefmt='y-',  # yellow line
-        markerfmt='yo',  # yellow marker
-        basefmt=' '
-    )
-    clustered_points = df[df['AUG12_found_final'] == 'Y']
-    ax.stem(
-        clustered_points.index,
-        clustered_points['adjusted_position_o'],
-        bottom=graph_pos[protein],
-        linefmt='y-',  # yellow line
-        markerfmt='yo',  # yellow marker
-        basefmt=' '
-    )
-    clustered_points = df[df['CLIP34nt_found_new'] == 'Y']
-    ax.stem(
-        clustered_points.index,
-        clustered_points['adjusted_position_o'],
-        bottom=graph_pos[protein],
-        linefmt='o-',  # yellow line
-        markerfmt='or',  # yellow marker
-        basefmt=' '
-    )
-    clustered_points = df[df['CLIP34nt_found_final'] == 'Y']
-    ax.stem(
-        clustered_points.index,
-        clustered_points['adjusted_position_o'],
-        bottom=graph_pos[protein],
-        linefmt='o-',  # yellow line
-        markerfmt='or',  # yellow marker
         basefmt=' '
     )
 plt.xlabel('Position',fontsize=30)
@@ -204,6 +204,30 @@ ax.spines['right'].set_visible(False)
 #     ax.text(0.0, 1.1, label, transform=ax.transAxes + trans,
 #             fontsize=12, va='bottom', fontweight='bold')
 
+
+
+#SAVE FIGURE
 plt.savefig('nucleotide_identity_graphs.svg')
+
+#SAVE RO_CODON SEQUENCES
+
+grouped_sequences = {name: group.copy() for name, group in sequences.groupby('data_source')}
+
+# Convert each group's 'ro_codon' column to a string
+ro_codon_strings = {name: ''.join(group['ro_codon'].astype(str)) for name, group in grouped_sequences.items()}
+
+
+
+# Save each ro_codon string as a text file
+output_dir = "ro-sequences_no_motifs"
+os.makedirs(output_dir, exist_ok=True)
+
+for name, codon_string in ro_codon_strings.items():
+    # Create a simple filename based on the group name
+    base_name = os.path.splitext(name)[0]  # Remove .csv extension
+    base_name = base_name.replace("Optimised", "ro")
+    output_path = os.path.join(output_dir, f"{base_name}.txt")
+    with open(output_path, "w") as f:
+        f.write(codon_string)
 
 
