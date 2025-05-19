@@ -1,0 +1,209 @@
+import os, re
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.transforms as mtransforms
+import seaborn as sns
+from textwrap import wrap
+from loguru import logger
+from itertools import groupby
+from operator import itemgetter
+
+logger.info('Import OK')
+
+input_path = 'results/'
+input_codon_map = 'experimental_data/codon-table.csv'
+output_folder = 'results/'
+
+
+file_list = [filename for filename in os.listdir(input_path) if 'Optimised-sequences_' in filename]
+
+sequences = []
+for x in file_list:
+    sequence = pd.read_csv(f'{input_path}{x}')
+    sequence['graph_negatives'] = - sequence ['final_nucleotide_identity']
+    sequence['data_source'] = x
+    sequences.append(sequence)
+
+
+#Locate TG repeats in final codon
+for i in sequences: 
+    final_codon_list = i['final_codon'].tolist()
+    final_codon_seq = ''.join(final_codon_list)
+    T_1 = re.sub(r'T(?=G)', '1', final_codon_seq)
+    T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
+    T0 = re.sub(r'[A-Z]', '0', T_1_A)
+    i['T0_A_final'] = wrap(T0, 3)
+    
+
+#replace '10' repeats with R
+min_repeats = 5
+for i in sequences:
+    repeat_lists = i['T0_A_final'].tolist()
+    repeat_seq = ''.join(repeat_lists)
+    pattern = f"(10(2)?){min_repeats,}"
+    matches = re.sub(pattern, 'R', repeat_seq)
+    i['identified_repeats_final'] = wrap(matches, 3)
+
+for i in sequences:
+    i['R_found_final'] = ['Y' if 'R' in repeats else 'N' for repeats in i['identified_repeats_final']]
+
+#Locate TG repeats in optimised codon
+T0_list = []
+for i in sequences: 
+    new_codon_list = i['new_codon'].tolist()
+    new_codon_seq = ''.join(new_codon_list)
+    T_1 = re.sub(r'T(?=G)', '1', new_codon_seq)
+    T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
+    T0 = re.sub(r'[A-Z]', '0', T_1_A)
+    i['T0_A_new'] = wrap(T0, 3)
+
+
+#replace '10' repeats with R
+min_repeats = 5
+for i in sequences:
+    repeat_lists = i['T0_A_new'].tolist()
+    repeat_seq = ''.join(repeat_lists)
+    pattern = f"(10(2)?){min_repeats,}"
+    matches = re.sub(pattern, 'R', repeat_seq)
+    i['identified_repeats_new'] = wrap(matches, 3)
+
+for i in sequences:
+    i['R_found_new'] = ['Y' if 'R' in repeats else 'N' for repeats in i['identified_repeats_new']]
+
+
+#Locate AUG12 sequence in final codon
+for i in sequences: 
+    final_codon_list = i['final_codon'].tolist()
+    final_codon_seq = ''.join(final_codon_list)
+    AUG12_sub = re.sub(r'GUGUGAAUGAAU', 'XXXXXXXXXX', final_codon_seq)
+    i['AUG12_final'] = wrap(AUG12_sub, 3)
+
+for i in sequences:
+    i['AUG12_found_final'] = ['Y' if 'X' in repeats else 'N' for repeats in i['AUG12_final']]
+
+#Locate AUG12 sequence in new codon
+for i in sequences: 
+    final_codon_list = i['new_codon'].tolist()
+    final_codon_seq = ''.join(final_codon_list)
+    AUG12_sub = re.sub(r'GUGUGAAUGAAU', 'XXXXXXXXXX', final_codon_seq)
+    i['AUG12_new'] = wrap(AUG12_sub, 3)
+
+for i in sequences:
+    i['AUG12_found_new'] = ['Y' if 'X' in repeats else 'N' for repeats in i['AUG12_new']]
+
+#Locate CLIP34nt sequence in final codon
+for i in sequences: 
+    final_codon_list = i['final_codon'].tolist()
+    final_codon_seq = ''.join(final_codon_list)
+    CLIP34nt_sub = re.sub(r'GAGAGAGCGCGUGCAGAGACUUGGUGGUGCAUAA', 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', final_codon_seq)
+    i['CLIP34nt_final'] = wrap(CLIP34nt_sub, 3)
+
+for i in sequences:
+    i['CLIP34nt_found_final'] = ['Y' if 'X' in repeats else 'N' for repeats in i['CLIP34nt_final']]
+
+#Locate CLIP34nt sequence in new codon
+for i in sequences: 
+    final_codon_list = i['new_codon'].tolist()
+    final_codon_seq = ''.join(final_codon_list)
+    CLIP34nt_sub = re.sub(r'GAGAGAGCGCGUGCAGAGACUUGGUGGUGCAUAA', 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX', final_codon_seq)
+    i['CLIP34nt_new'] = wrap(CLIP34nt_sub, 3)
+
+for i in sequences:
+    i['CLIP34nt_found_new'] = ['Y' if 'X' in repeats else 'N' for repeats in i['CLIP34nt_new']]
+
+
+#concatenate all dataframes
+sequences = pd.concat(sequences)
+
+sequences['protein'] = sequences['data_source'].str.split('_').str[-1].str.split('.').str[0]
+
+graph_pos = {'ENV':10,'POL':20,'PRO':30,'GAG':40}
+
+sequences['adjusted_position_ro'] = sequences['protein'].map(graph_pos) + sequences['graph_negatives']
+
+sequences['adjusted_position_o'] = sequences['protein'].map(graph_pos) + sequences['nucleotide_identity']
+
+
+
+#Visualisation of nucleotide identity
+tick_labels = dict(sequences[['adjusted_position_ro', 'graph_negatives']].values)
+tick_labels.update(sequences[['adjusted_position_o', 'nucleotide_identity']].values)
+
+#plot graph
+fig, ax = plt.subplots( figsize=(35, 25))
+for protein, df in sequences.groupby('protein'):
+    plt.stem(range(len(df)), df['adjusted_position_ro'], bottom=graph_pos[protein])
+    plt.stem(range(len(df)), df['adjusted_position_o'], bottom=graph_pos[protein])
+    clustered_points = df[df['R_found_new'] == 'Y']
+    ax.stem(
+        clustered_points.index,
+        clustered_points['adjusted_position_o'],
+        bottom=graph_pos[protein],
+        linefmt='r-',  # Red line
+        markerfmt='ro',  # Red marker
+        basefmt=' '
+    )
+    clustered_points = df[df['R_found_final'] == 'Y']
+    ax.stem(
+        clustered_points.index,
+        clustered_points['adjusted_position_o'],
+        bottom=graph_pos[protein],
+        linefmt='r-',  # Red line
+        markerfmt='ro',  # Red marker
+        basefmt=' '
+    )
+    clustered_points = df[df['AUG12_found_new'] == 'Y']
+    ax.stem(
+        clustered_points.index,
+        clustered_points['adjusted_position_o'],
+        bottom=graph_pos[protein],
+        linefmt='y-',  # yellow line
+        markerfmt='yo',  # yellow marker
+        basefmt=' '
+    )
+    clustered_points = df[df['AUG12_found_final'] == 'Y']
+    ax.stem(
+        clustered_points.index,
+        clustered_points['adjusted_position_o'],
+        bottom=graph_pos[protein],
+        linefmt='y-',  # yellow line
+        markerfmt='yo',  # yellow marker
+        basefmt=' '
+    )
+    clustered_points = df[df['CLIP34nt_found_new'] == 'Y']
+    ax.stem(
+        clustered_points.index,
+        clustered_points['adjusted_position_o'],
+        bottom=graph_pos[protein],
+        linefmt='o-',  # yellow line
+        markerfmt='or',  # yellow marker
+        basefmt=' '
+    )
+    clustered_points = df[df['CLIP34nt_found_final'] == 'Y']
+    ax.stem(
+        clustered_points.index,
+        clustered_points['adjusted_position_o'],
+        bottom=graph_pos[protein],
+        linefmt='o-',  # yellow line
+        markerfmt='or',  # yellow marker
+        basefmt=' '
+    )
+plt.xlabel('Position',fontsize=30)
+ax.set_yticks(list(tick_labels.keys()),labels=list(tick_labels.values()), fontsize=30)
+ax.set_ylim(5,45)
+ax.set_xticks(ax.get_xticks(), labels = [int(x) for x in ax.get_xticks()], fontsize=30)
+ax.set_xlim(0,1000)
+# Remove the top and right borders
+ax.spines['top'].set_visible(False)
+ax.spines['right'].set_visible(False)
+
+# for ax, label in zip([axA, axBi, axC, axDi], ['GAG', 'PRO', 'POL', 'ENV']):
+# # label physical distance to the left and up:
+#     trans = mtransforms.ScaledTranslation(-35/72, -11/72, fig.dpi_scale_trans)
+#     ax.text(0.0, 1.1, label, transform=ax.transAxes + trans,
+#             fontsize=12, va='bottom', fontweight='bold')
+
+plt.savefig('nucleotide_identity_graphs.svg')
+
+
