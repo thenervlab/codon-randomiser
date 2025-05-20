@@ -137,12 +137,34 @@ def randomise_codons(i):
             final_codons.append(codon)
     return final_codons
 
-sequences['ro_codon'] = randomise_codons(sequences)
+sequences['pre-ro_codon'] = randomise_codons(sequences)
+
+
+#PRE-RO_CODON TG REPEATS
+ro_codon_list = sequences['pre-ro_codon'].tolist()
+ro_codon_seq = ''.join(ro_codon_list)
+T_1 = re.sub(r'T(?=G)', '1', ro_codon_seq)
+T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
+T0 = re.sub(r'[A-Z]', '0', T_1_A)
+sequences['T0_A_pre-ro'] = wrap(T0, 3)
+    
+
+#replace '10' repeats with R
+repeat_lists = sequences['T0_A_pre-ro'].tolist()
+repeat_seq = ''.join(repeat_lists)
+pattern = f"(1010)"
+matches = re.sub(pattern, 'RRRR', repeat_seq)
+sequences['identified_repeats_pre-ro'] = wrap(matches, 3)
+sequences['R_found_pre-ro'] = ['Y' if 'R' in repeats else 'N' for repeats in sequences['identified_repeats_pre-ro']]
+
+
+
+# reinsert codon if TG repeat located in RO codon and not in original codon
+sequences['ro_codon'] = [x if y == 'N' else z for x,y,z in zip (sequences['pre-ro_codon'], sequences['R_found_pre-ro'], sequences['original_codon'])]
 
 
 
 #NUCLEOTIDE IDENTITY CALCULATION FOR RO_CODONS
-
 sequences['ro_codon_identity'] = [1 if old == new else 0 for old, new in sequences[['new_codon', 'ro_codon']].values]
 codon_identity = sequences['codon_identity'].sum() / len(sequences) * 100
 logger.info(f'The proportion of matched codons is:{codon_identity} %')
@@ -168,7 +190,6 @@ T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
 T0 = re.sub(r'[A-Z]', '0', T_1_A)
 sequences['T0_A_ro'] = wrap(T0, 3)
     
-
 #replace '10' repeats with R
 repeat_lists = sequences['T0_A_ro'].tolist()
 repeat_seq = ''.join(repeat_lists)
@@ -176,7 +197,6 @@ pattern = f"(1010)"
 matches = re.sub(pattern, 'RRRR', repeat_seq)
 sequences['identified_repeats_ro'] = wrap(matches, 3)
 sequences['R_found_ro'] = ['Y' if 'R' in repeats else 'N' for repeats in sequences['identified_repeats_ro']]
-
 
 #Visualisation of nucleotide identity
 
