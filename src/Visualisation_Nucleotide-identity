@@ -74,6 +74,28 @@ for i in sequences:
 for i in sequences:
     i['R_found_final'] = ['Y' if 'R' in repeats else 'N' for repeats in i['identified_repeats_final']]
 
+#Original codon TG repeats
+T0_list = []
+for i in sequences: 
+    orig_codon_list = i['original_codon'].tolist()
+    orig_codon_seq = ''.join(orig_codon_list)
+    T_1 = re.sub(r'T(?=G)', '1', orig_codon_seq)
+    T_1_A = re.sub(r'(?=10)A(?=10)|(?=01)A(?=01)', '2', T_1)
+    T0 = re.sub(r'[A-Z]', '0', T_1_A)
+    i['T0_A_orig'] = wrap(T0, 3)
+
+
+#replace '10' repeats with R
+min_repeats = 1
+for i in sequences:
+    repeat_lists = i['T0_A_orig'].tolist()
+    repeat_seq = ''.join(repeat_lists)
+    pattern = f"(1010)"
+    matches = re.sub(pattern, 'RRRR', repeat_seq)
+    i['identified_repeats_orig'] = wrap(matches, 3)
+
+for i in sequences:
+    i['R_found_orig'] = ['Y' if 'R' in repeats else 'N' for repeats in i['identified_repeats_orig']]
 
 
 #concatenate all dataframes
@@ -88,12 +110,16 @@ sequences['R_cluster'] = (sequences['R_found_final'] == 'Y') & (sequences['R_fou
 input_codon_map = 'experimental_data/codon-table.csv'
 
 codon_map = pd.read_csv(input_codon_map)
+
+# Remove rows where 'Codon' starts with 'TG' and ends with 'TG'
+codon_map_no_TG = codon_map[
+    ~(codon_map['Codon'].str.startswith('TG') | codon_map['Codon'].str.endswith('TG'))
+]
+
 stop_codons = codon_map[codon_map['FullName'] == 'Stop'].copy()['Codon'].tolist() 
 
 stringency = 'high'
 new_codons = []
-
-#NOT WORKING
 
 def randomise_codons(i):
     final_codons = []
@@ -103,14 +129,17 @@ def randomise_codons(i):
 
             available_codons = codon_map[codon_map['AminoAcid'] == amino_acid]['Codon'].tolist().copy()
             if stringency == 'high':
-                if len(available_codons) > 1:
-                    available_codons = [val for val in available_codons if val != codon]        
+                if [codon_map['Codon'].str.startswith('TG') | codon_map['Codon'].str.endswith('TG')] ==False:
+                    if len(available_codons) > 1:
+                        available_codons = [val for val in available_codons if val != codon]        
             final_codons.append(np.random.choice(available_codons))
         else:
             final_codons.append(codon)
     return final_codons
 
 sequences['ro_codon'] = randomise_codons(sequences)
+
+
 
 #NUCLEOTIDE IDENTITY CALCULATION FOR RO_CODONS
 
@@ -132,8 +161,6 @@ for old, new in sequences[['original_codon', 'ro_codon']].values:
 sequences['ro_nucleotide_identity'] = nt_identities
 
 #RO_CODON TG REPEATS
-#Locate TG repeats in final codon
-
 ro_codon_list = sequences['ro_codon'].tolist()
 ro_codon_seq = ''.join(ro_codon_list)
 T_1 = re.sub(r'T(?=G)', '1', ro_codon_seq)
@@ -143,7 +170,6 @@ sequences['T0_A_ro'] = wrap(T0, 3)
     
 
 #replace '10' repeats with R
-
 repeat_lists = sequences['T0_A_ro'].tolist()
 repeat_seq = ''.join(repeat_lists)
 pattern = f"(1010)"
@@ -157,10 +183,17 @@ sequences['R_found_ro'] = ['Y' if 'R' in repeats else 'N' for repeats in sequenc
 sequences['protein'] = sequences['data_source'].str.split('_').str[-1].str.split('.').str[0]
 
 graph_pos = {'ENV':10,'POL':20,'PRO':30,'GAG':40}
-sequences['ro_graph_negatives'] = - sequences['ro_nucleotide_identity']
 
+
+#Original codon position
+sequences['original_codon_position'] = 0
+sequences['original_codon_adjusted_positions'] = sequences['protein'].map(graph_pos) + sequences['original_codon_position']
+
+#RO identity position
+sequences['ro_graph_negatives'] = - sequences['ro_nucleotide_identity']
 sequences['adjusted_position_ro'] = sequences['protein'].map(graph_pos) + sequences['ro_graph_negatives']
 
+#O identity position
 sequences['adjusted_position_o'] = sequences['protein'].map(graph_pos) + sequences['nucleotide_identity']
 
 tick_labels = dict(sequences[['adjusted_position_ro', 'ro_graph_negatives']].values)
@@ -171,6 +204,7 @@ fig, ax = plt.subplots(figsize=(35, 25))
 for protein, df in sequences.groupby('protein'):
     ax.stem(range(len(df)), df['adjusted_position_ro'], bottom=graph_pos[protein])
     ax.stem(range(len(df)), df['adjusted_position_o'], bottom=graph_pos[protein])
+    ax.stem(range(len(df)), df['original_codon_adjusted_positions'], bottom=graph_pos[protein])
     clustered_points = df[df['R_found_new'] == 'Y']
     ax.stem(
         clustered_points.index,
@@ -189,6 +223,16 @@ for protein, df in sequences.groupby('protein'):
         markerfmt='ro',  # Red marker
         basefmt=' '
     )
+    clustered_points = df[df['R_found_orig'] == 'Y']
+    markerline, stemlines, baseline = ax.stem(
+        clustered_points.index,
+        clustered_points['original_codon_adjusted_positions'],
+        bottom=graph_pos[protein],
+        linefmt='r-',  # Red line
+        markerfmt='o',  # Marker
+        basefmt=' '
+    )
+    markerline.set_color('yellow')
 plt.xlabel('Position',fontsize=30)
 ax.set_yticks(list(tick_labels.keys()),labels=list(tick_labels.values()), fontsize=30)
 ax.set_ylim(5,45)
@@ -229,5 +273,3 @@ for name, codon_string in ro_codon_strings.items():
     output_path = os.path.join(output_dir, f"{base_name}.txt")
     with open(output_path, "w") as f:
         f.write(codon_string)
-
-
