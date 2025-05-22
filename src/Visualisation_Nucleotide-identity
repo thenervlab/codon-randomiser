@@ -129,10 +129,12 @@ def randomise_codons(i):
 
             available_codons = codon_map[codon_map['AminoAcid'] == amino_acid]['Codon'].tolist().copy()
             if stringency == 'high':
-                if [codon_map['Codon'].str.startswith('TG') | codon_map['Codon'].str.endswith('TG')] ==False:
-                    if len(available_codons) > 1:
-                        available_codons = [val for val in available_codons if val != codon]        
-            final_codons.append(np.random.choice(available_codons))
+                if len(available_codons) > 1: 
+                    available_codons = [val for val in available_codons if val != codon]
+                if len(available_codons) > 1:
+                    if len([val for val in available_codons if 'TG' not in val]) > 0:
+                        available_codons = [val for val in available_codons if 'TG' not in val]
+                final_codons.append(np.random.choice(available_codons))
         else:
             final_codons.append(codon)
     return final_codons
@@ -275,6 +277,11 @@ plt.savefig('nucleotide_identity_graphs.svg')
 
 #SAVE RO_CODON SEQUENCES
 
+output_dir = "ro-sequences_no_motifs"
+os.makedirs(output_dir, exist_ok=True)
+
+sequences.to_csv(os.path.join(output_dir, 'all_sequences.csv'), index=False)
+
 grouped_sequences = {name: group.copy() for name, group in sequences.groupby('data_source')}
 
 # Convert each group's 'ro_codon' column to a string
@@ -283,8 +290,7 @@ ro_codon_strings = {name: ''.join(group['ro_codon'].astype(str)) for name, group
 
 
 # Save each ro_codon string as a text file
-output_dir = "ro-sequences_no_motifs"
-os.makedirs(output_dir, exist_ok=True)
+
 
 for name, codon_string in ro_codon_strings.items():
     # Create a simple filename based on the group name
