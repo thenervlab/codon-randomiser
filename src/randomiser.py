@@ -80,6 +80,7 @@ for codon in codons['original_codon']:
     
 codons['new_codon'] = new_codons  
 
+
 # Calculate % identity with original sequence
 ## At the codon level
 ## At the nucleotide level
