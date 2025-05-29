@@ -204,7 +204,7 @@ sequences['R_found_ro'] = ['Y' if 'R' in repeats else 'N' for repeats in sequenc
 
 sequences['protein'] = sequences['data_source'].str.split('_').str[-1].str.split('.').str[0]
 
-graph_pos = {'ENV':10,'POL':20,'PRO':30,'GAG':40}
+graph_pos = {'ENV':10,'POL':18,'PRO':26,'GAG':34}
 
 
 #Original codon position
@@ -221,59 +221,165 @@ sequences['adjusted_position_o'] = sequences['protein'].map(graph_pos) + sequenc
 tick_labels = dict(sequences[['adjusted_position_ro', 'ro_graph_negatives']].values)
 tick_labels.update(sequences[['adjusted_position_o', 'nucleotide_identity']].values)
 
+abs_tick_labels = {k:abs(v) for k,v in tick_labels.items()}
+
+# Create a color palette 
+NRV_palette = [
+    '#000000',
+    '#141414', 
+    '#525252',
+    '#520B57', 
+    '#915A95', 
+    '#80A4DA', 
+    '#0BBDA3', 
+    '#FF960A',
+    '#EA4A07',
+    '#A00935'
+]
+
+NRV_palette_custom = {
+    'POL': '#520B57',  
+    'GAG': '#80A4DA', 
+    'PRO': '#0BBDA3', 
+    'ENV': '#FF960A',
+}
+
+stem_circle_size = 1
+circle_callout_size = 2
+
 #plot graph
-fig, ax = plt.subplots(figsize=(35, 25))
+fig, ax = plt.subplots(figsize=(7, 4.375))
 for protein, df in sequences.groupby('protein'):
-    ax.stem(range(len(df)), df['adjusted_position_ro'], bottom=graph_pos[protein])
-    ax.stem(range(len(df)), df['adjusted_position_o'], bottom=graph_pos[protein])
-    ax.stem(range(len(df)), df['original_codon_adjusted_positions'], bottom=graph_pos[protein])
-    clustered_points = df[df['R_found_new'] == 'Y']
-    ax.stem(
+    
+    # Use custom palette for this protein
+    color = NRV_palette_custom.get(protein, '#897FB8')
+    markerline, stemlines, baseline = ax.stem(
+        range(len(df)),
+        df['adjusted_position_ro'],
+        bottom=graph_pos[protein],
+        linefmt=color,
+        markerfmt=color,
+        basefmt=' '
+    )
+    markerline.set_markersize(stem_circle_size)
+    plt.setp(stemlines, 'linewidth', 0.5)
+
+    markerline, stemlines, baseline = ax.stem(range(len(df)), df['adjusted_position_o'], bottom=graph_pos[protein], linefmt='#858585')
+    markerline.set_markersize(stem_circle_size)
+    plt.setp(stemlines, 'linewidth', 0.5)  
+            
+    markerline, stemlines, baseline = ax.stem(range(len(df)), df['original_codon_adjusted_positions'], bottom=graph_pos[protein], linefmt='#915A95')
+    markerline.set_markersize(stem_circle_size)  # Set marker size
+    plt.setp(stemlines, 'linewidth', 0.5)        # Set line width (thinner
+
+    # Clustered points: both R_found_new and R_found_orig are 'Y'
+    mask_both = (df['R_found_new'] == 'Y') & (df['R_found_orig'] == 'Y')
+    clustered_points = df[mask_both]
+    markerline, stemlines, baseline = ax.stem(
         clustered_points.index,
         clustered_points['adjusted_position_o'],
         bottom=graph_pos[protein],
-        linefmt='r-',  # Red line
-        markerfmt='ro',  # Red marker
+        linefmt='#292929',  # Black line
+        markerfmt='#292929',  # Black marker
         basefmt=' '
     )
+    markerline.set_markersize(circle_callout_size)
+
+    # Clustered points: R_found_new is 'Y' and R_found_orig is not 'Y'
+    mask_new_only = (df['R_found_new'] == 'Y') & (df['R_found_orig'] != 'Y')
+    clustered_points = df[mask_new_only]
+    markerline, stemlines, baseline = ax.stem(
+        clustered_points.index,
+        clustered_points['adjusted_position_o'],
+        bottom=graph_pos[protein],
+        linefmt='#A00935',  # Red line
+        markerfmt='#A00935',  # Red marker
+        basefmt=' '
+    )
+    markerline.set_markersize(circle_callout_size)
+
     clustered_points = df[df['R_found_ro'] == 'Y']
-    ax.stem(
+    markerline, stemlines, baseline = ax.stem(
         clustered_points.index,
         clustered_points['adjusted_position_ro'],
         bottom=graph_pos[protein],
-        linefmt='r-',  # Red line
-        markerfmt='ro',  # Red marker
+        linefmt='#A00935',  # Red line
+        markerfmt='#A00935',  # Red marker
         basefmt=' '
     )
+    markerline.set_markersize(circle_callout_size)
+
     clustered_points = df[df['R_found_orig'] == 'Y']
     markerline, stemlines, baseline = ax.stem(
         clustered_points.index,
         clustered_points['original_codon_adjusted_positions'],
         bottom=graph_pos[protein],
-        linefmt='r-',  # Red line
-        markerfmt='o',  # Marker
+        linefmt='#A00935',  # Red line
+        markerfmt= '#292929',  # Marker
         basefmt=' '
     )
-    markerline.set_color('yellow')
-plt.xlabel('Position',fontsize=30)
-ax.set_yticks(list(tick_labels.keys()),labels=list(tick_labels.values()), fontsize=30)
-ax.set_ylim(5,45)
-ax.set_xticks(ax.get_xticks(), labels = [int(x) for x in ax.get_xticks()], fontsize=30)
+    markerline.set_color('#292929')
+    markerline.set_markersize(circle_callout_size) 
+
+plt.xlabel('Position (codon)',fontsize=8)
+plt.ylabel('ΔResidue from original codon', labelpad= +10)
+ax.set_yticks(list(abs_tick_labels.keys()),labels=list(abs_tick_labels.values()), fontsize=8)
+ax.set_ylim(5,40)
+ax.set_xticks(ax.get_xticks(), labels = [int(x) for x in ax.get_xticks()], fontsize=8)
 ax.set_xlim(0,1000)
 # Remove the top and right borders
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 
-# for ax, label in zip([axA, axBi, axC, axDi], ['GAG', 'PRO', 'POL', 'ENV']):
-# # label physical distance to the left and up:
-#     trans = mtransforms.ScaledTranslation(-35/72, -11/72, fig.dpi_scale_trans)
-#     ax.text(0.0, 1.1, label, transform=ax.transAxes + trans,
-#             fontsize=12, va='bottom', fontweight='bold')
+#Place labels at the y positions for each protein
+for protein, ypos in graph_pos.items():
+    trans = mtransforms.ScaledTranslation(-35/72, -11/72, fig.dpi_scale_trans)
+    ax.text(
+        +38, ypos +0.6,  # x, y position (adjust as needed)
+        protein,
+        transform=ax.transData + trans,
+        fontsize=8, va='bottom',
+        rotation=90
+    )
+
+plt.savefig('nucleotide_identity.svg', bbox_inches='tight', pad_inches=0.05)
 
 
+plt.savefig('nucleotide_identity_graph.svg')
 
-#SAVE FIGURE
-plt.savefig('nucleotide_identity_graphs.svg')
+
+# from matplotlib.legend_handler import HandlerTuple
+# from matplotlib.lines import Line2D
+
+# class HandlerVerticalLineWithCircle(HandlerTuple):
+#     def create_artists(self, legend, orig_handle,
+#                        xdescent, ydescent, width, height, fontsize, trans):
+#         # Center x, from bottom to top
+#         x = width / 2
+#         y0 = ydescent
+#         y1 = height + ydescent
+#         # Vertical line
+#         line = Line2D([x, x], [y0, y1], color=orig_handle[0].get_color(), lw=orig_handle[0].get_linewidth(), transform=trans)
+#         # Circle at the top
+#         circle = Line2D([x], [y1], color=orig_handle[1].get_color(), marker='o',
+#                         markersize=orig_handle[1].get_markersize(), linestyle='None', transform=trans)
+#         return [line, circle]
+
+# # Create the legend element as before
+# line = Line2D([0, 0], [0, 1], color='blue', lw=2)
+# circle = Line2D([0], [1], color='blue', marker='o', markersize=12, linestyle='None')
+
+# legend_elements = [
+#     ((line, circle), "Custom Arrow")
+# ]
+
+# ax.legend(
+#     [le[0] for le in legend_elements],
+#     [le[1] for le in legend_elements],
+#     handler_map={tuple: HandlerVerticalLineWithCircle()},
+#     loc='center'
+# )
+
 
 #SAVE RO_CODON SEQUENCES
 
@@ -290,7 +396,6 @@ ro_codon_strings = {name: ''.join(group['ro_codon'].astype(str)) for name, group
 
 
 # Save each ro_codon string as a text file
-
 
 for name, codon_string in ro_codon_strings.items():
     # Create a simple filename based on the group name
